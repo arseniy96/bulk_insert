@@ -7,7 +7,7 @@ module BulkInsert
     attr_accessor :adapter_name
     attr_reader :ignore, :update_duplicates, :result_sets
 
-    def initialize(connection, table_name, primary_key, column_names, set_size=500, ignore=false, update_duplicates=false, return_primary_keys=false)
+    def initialize(connection, table_name, primary_key, column_names, set_size = 500, ignore = false, update_duplicates = false, return_primary_keys = false)
       @connection = connection
       @set_size = set_size
 
@@ -18,12 +18,12 @@ module BulkInsert
       @return_primary_keys = return_primary_keys
 
       columns = connection.columns(table_name)
-      column_map = columns.inject({}) { |h, c| h.update(c.name => c) }
+      column_map = columns.inject({}) {|h, c| h.update(c.name => c)}
 
       @primary_key = primary_key
-      @columns = column_names.map { |name| column_map[name.to_s] }
+      @columns = column_names.map {|name| column_map[name.to_s]}
       @table_name = connection.quote_table_name(table_name)
-      @column_names = column_names.map { |name| connection.quote_column_name(name) }.join(",")
+      @column_names = column_names.map {|name| connection.quote_column_name(name)}.join(",")
 
       @before_save_callback = nil
       @after_save_callback = nil
@@ -45,26 +45,26 @@ module BulkInsert
 
       values = values.with_indifferent_access if values.is_a?(Hash)
       mapped = @columns.map.with_index do |column, index|
-          value_exists = values.is_a?(Hash) ? values.key?(column.name) : (index < values.length)
-          if !value_exists
-            if column.default.present?
-              column.default
-            elsif column.name == "created_at" || column.name == "updated_at"
-              :__timestamp_placeholder
-            else
-              nil
-            end
+        value_exists = values.is_a?(Hash) ? values.key?(column.name) : (index < values.length)
+        if !value_exists
+          if column.default.present?
+            column.default
+          elsif column.name == "created_at" || column.name == "updated_at"
+            :__timestamp_placeholder
           else
-            values.is_a?(Hash) ? values[column.name] : values[index]
+            nil
           end
+        else
+          values.is_a?(Hash) ? values[column.name] : values[index]
         end
+      end
 
       @set.push(mapped)
       self
     end
 
     def add_all(rows)
-      rows.each { |row| add(row) }
+      rows.each {|row| add(row)}
       self
     end
 
@@ -131,12 +131,12 @@ module BulkInsert
     def insert_ignore
       if ignore
         case adapter_name
-        when /^mysql/i
-          'IGNORE'
-        when /\ASQLite/i # SQLite
-          'OR IGNORE'
-        else
-          '' # Not supported
+          when /^mysql/i
+            'IGNORE'
+          when /\ASQLite/i # SQLite
+            'OR IGNORE'
+          else
+            '' # Not supported
         end
       end
     end
@@ -150,8 +150,13 @@ module BulkInsert
     end
 
     def on_conflict_statement
-      if (adapter_name =~ /\APost(?:greSQL|GIS)/i && ignore )
+      if (adapter_name =~ /\APost(?:greSQL|GIS)/i && ignore)
         ' ON CONFLICT DO NOTHING'
+      elsif (adapter_name =~ /\APost(?:greSQL|GIS)/i && update_duplicates)
+        update_values = @columns.map do |column|
+          "#{column.name} = excluded.#{column.name}"
+        end.join(', ')
+        ' ON CONFLICT (' + @columns.map(&:name).join(',') + ') DO UPDATE SET ' + update_values
       elsif adapter_name =~ /^mysql/i && update_duplicates
         update_values = @columns.map do |column|
           "`#{column.name}`=VALUES(`#{column.name}`)"
